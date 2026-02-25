@@ -1,99 +1,95 @@
+import browser from 'webextension-polyfill';
 import Anthropic from '@anthropic-ai/sdk';
 import type { SummaryResult, BackgroundResponse } from './types';
 
 // ---------------------------------------------------------------------------
 // Message router
 // ---------------------------------------------------------------------------
-chrome.runtime.onMessage.addListener(
-  (message, _sender, sendResponse: (r: BackgroundResponse | { apiKey: string | null }) => void) => {
-    switch (message.type) {
-      case 'ANALYZE_PAGE':
-        handleAnalyze(sendResponse as (r: BackgroundResponse) => void);
-        return true; // async
+browser.runtime.onMessage.addListener(
+  (message: unknown, _sender: browser.Runtime.MessageSender) => {
+    const msg = message as { type: string; payload?: unknown };
 
-      case 'SET_API_KEY':
-        chrome.storage.local.set({ apiKey: message.payload }, () => {
-          (sendResponse as (r: { success: boolean }) => void)({ success: true });
-        });
-        return true;
+    if (msg.type === 'ANALYZE_PAGE') {
+      return handleAnalyze();
+    }
 
-      case 'GET_API_KEY':
-        chrome.storage.local.get('apiKey', data => {
-          (sendResponse as (r: { apiKey: string | null }) => void)({
-            apiKey: (data.apiKey as string) || null,
-          });
-        });
-        return true;
+    if (msg.type === 'SET_API_KEY') {
+      return browser.storage.local.set({ apiKey: msg.payload }).then(() => ({ success: true }));
+    }
+
+    if (msg.type === 'GET_API_KEY') {
+      return browser.storage.local.get('apiKey').then(data => ({
+        apiKey: (data.apiKey as string) || null,
+      }));
     }
   }
 );
 
 // ---------------------------------------------------------------------------
-// Core analysis handler
+// Core analysis handler — returns a Promise (MV3 / Safari compatible)
 // ---------------------------------------------------------------------------
-async function handleAnalyze(
-  sendResponse: (r: BackgroundResponse) => void
-): Promise<void> {
+async function handleAnalyze(): Promise<BackgroundResponse> {
   try {
     // 1. Get the active tab
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id || !tab.url) {
-      return sendResponse({ success: false, error: 'No active tab found.' });
+      return { success: false, error: 'No active tab found.' };
     }
 
     // Check for restricted URLs that content scripts can't access
     if (
       tab.url.startsWith('chrome://') ||
       tab.url.startsWith('about:') ||
-      tab.url.startsWith('chrome-extension://')
+      tab.url.startsWith('chrome-extension://') ||
+      tab.url.startsWith('safari-web-extension://')
     ) {
-      return sendResponse({
+      return {
         success: false,
         error: 'Cannot analyze browser internal pages. Navigate to a real article first.',
-      });
+      };
     }
 
     // 2. Check session cache (avoids re-analysis on popup re-open)
     const cacheKey = `summary_${tab.url}`;
-    const cached = await chrome.storage.session.get(cacheKey);
+    const cached = await browser.storage.session.get(cacheKey);
     if (cached[cacheKey]) {
-      return sendResponse({ success: true, data: cached[cacheKey] as SummaryResult });
+      return { success: true, data: cached[cacheKey] as SummaryResult };
     }
 
     // 3. Extract page text via content script
     let extractedText: string;
     try {
-      const result = await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_TEXT' }) as { text: string };
+      const result = await browser.tabs.sendMessage(tab.id, { type: 'EXTRACT_TEXT' }) as { text: string };
       extractedText = result.text;
     } catch {
-      // Content script not yet injected (e.g., page loaded before extension install)
+      // Content script not yet injected — try scripting API (Chrome) or skip (Safari handles via manifest)
       try {
-        await chrome.scripting.executeScript({
+        await (browser as unknown as typeof chrome).scripting.executeScript({
           target: { tabId: tab.id },
           files: ['content.js'],
         });
-        const result = await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_TEXT' }) as { text: string };
+        const result = await browser.tabs.sendMessage(tab.id, { type: 'EXTRACT_TEXT' }) as { text: string };
         extractedText = result.text;
-      } catch (injectErr) {
-        return sendResponse({
+      } catch {
+        return {
           success: false,
           error: 'Could not access page content. Try refreshing the page.',
-        });
+        };
       }
     }
 
     if (!extractedText || extractedText.trim().length < 100) {
-      return sendResponse({
+      return {
         success: false,
         error: 'Not enough text found on this page. It may be a video, image, or login-gated article.',
-      });
+      };
     }
 
     // 4. Get API key
-    const storageData = await chrome.storage.local.get('apiKey');
+    const storageData = await browser.storage.local.get('apiKey');
     const apiKey = storageData.apiKey as string | undefined;
     if (!apiKey) {
-      return sendResponse({ success: false, error: 'API_KEY_MISSING' });
+      return { success: false, error: 'API_KEY_MISSING' };
     }
 
     // 5. Call Claude
@@ -107,12 +103,12 @@ async function handleAnalyze(
     console.log(`[ArticleSummary] Claude responded in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
     // 6. Cache and respond
-    await chrome.storage.session.set({ [cacheKey]: result });
-    sendResponse({ success: true, data: result });
+    await browser.storage.session.set({ [cacheKey]: result });
+    return { success: true, data: result };
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    sendResponse({ success: false, error: msg });
+    return { success: false, error: msg };
   }
 }
 

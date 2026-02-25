@@ -1,15 +1,14 @@
 // Content script — runs on every http/https page.
 // Waits for messages from the background service worker and returns extracted text.
 
-chrome.runtime.onMessage.addListener(
-  (message, _sender, sendResponse) => {
-    if (message.type === 'EXTRACT_TEXT') {
-      const text = extractArticleText();
-      sendResponse({ text });
-    }
-    return true; // keep the message channel open for async sendResponse
+import browser from 'webextension-polyfill';
+
+browser.runtime.onMessage.addListener((message: unknown) => {
+  const msg = message as { type: string };
+  if (msg.type === 'EXTRACT_TEXT') {
+    return Promise.resolve({ text: extractArticleText() });
   }
-);
+});
 
 // Selectors for non-article noise to strip from any container before extracting text.
 // Works on a cloned node — never mutates the real DOM.

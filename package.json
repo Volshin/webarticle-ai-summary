@@ -3,15 +3,20 @@
   "version": "1.0.0",
   "description": "Article summarizer Chrome extension powered by Claude AI",
   "scripts": {
-    "build": "webpack --mode production",
-    "dev": "webpack --mode development",
-    "watch": "webpack --mode development --watch"
+    "build": "TARGET=chrome webpack --mode production",
+    "build:safari": "TARGET=safari webpack --mode production",
+    "build:all": "npm run build && npm run build:safari",
+    "dev": "TARGET=chrome webpack --mode development",
+    "dev:safari": "TARGET=safari webpack --mode development",
+    "watch": "TARGET=chrome webpack --mode development --watch"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0"
+    "@anthropic-ai/sdk": "^0.78.0",
+    "webextension-polyfill": "^0.12.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.300",
+    "@types/webextension-polyfill": "^0.12.5",
     "copy-webpack-plugin": "^12.0.0",
     "ts-loader": "^9.5.1",
     "typescript": "^5.7.2",

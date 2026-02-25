@@ -1,3 +1,4 @@
+import browser from 'webextension-polyfill';
 import type { SummaryResult, BackgroundResponse } from '../types';
 import { LEVEL_KEYS } from '../types';
 
@@ -95,10 +96,9 @@ function analyze(forceRefresh = false): void {
   showLoading();
 
   if (forceRefresh) {
-    // Clear session cache for active tab first
-    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+    browser.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       if (tab?.url) {
-        chrome.storage.session.remove(`summary_${tab.url}`, () => sendAnalyzeMessage());
+        browser.storage.session.remove(`summary_${tab.url}`).then(() => sendAnalyzeMessage());
       } else {
         sendAnalyzeMessage();
       }
@@ -109,25 +109,24 @@ function analyze(forceRefresh = false): void {
 }
 
 function sendAnalyzeMessage(): void {
-  chrome.runtime.sendMessage({ type: 'ANALYZE_PAGE' }, (response: BackgroundResponse) => {
-    if (chrome.runtime.lastError) {
-      showError('Extension error: ' + chrome.runtime.lastError.message);
-      return;
-    }
-
-    if (!response.success) {
-      if (response.error === 'API_KEY_MISSING') {
-        apiKeySection.classList.remove('hidden');
-        showError('API key required. Enter it above to get started.');
-      } else {
-        showError(response.error);
+  browser.runtime.sendMessage({ type: 'ANALYZE_PAGE' })
+    .then((response) => {
+      const res = response as BackgroundResponse;
+      if (!res.success) {
+        if (res.error === 'API_KEY_MISSING') {
+          apiKeySection.classList.remove('hidden');
+          showError('API key required. Enter it above to get started.');
+        } else {
+          showError(res.error);
+        }
+        return;
       }
-      return;
-    }
-
-    currentData = response.data;
-    renderSummary(currentData, currentLevel);
-  });
+      currentData = res.data;
+      renderSummary(currentData, currentLevel);
+    })
+    .catch((err: Error) => {
+      showError('Extension error: ' + err.message);
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -157,9 +156,10 @@ settingsBtn.addEventListener('click', () => {
   apiKeySection.classList.toggle('hidden');
   if (!apiKeySection.classList.contains('hidden')) {
     // Pre-fill with existing key (masked)
-    chrome.runtime.sendMessage({ type: 'GET_API_KEY' }, (res: { apiKey: string | null }) => {
-      if (res.apiKey) {
-        apiKeyInput.placeholder = res.apiKey.slice(0, 12) + '…';
+    browser.runtime.sendMessage({ type: 'GET_API_KEY' }).then((res) => {
+      const r = res as { apiKey: string | null };
+      if (r.apiKey) {
+        apiKeyInput.placeholder = r.apiKey.slice(0, 12) + '…';
       }
     });
     apiKeyInput.focus();
@@ -175,7 +175,7 @@ function saveApiKey(): void {
   const key = apiKeyInput.value.trim();
   if (!key) return;
 
-  chrome.runtime.sendMessage({ type: 'SET_API_KEY', payload: key }, () => {
+  browser.runtime.sendMessage({ type: 'SET_API_KEY', payload: key }).then(() => {
     apiKeyInput.value = '';
     apiKeySection.classList.add('hidden');
     analyze();

@@ -2,6 +2,11 @@ const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
 const webpack = require('webpack');
 
+// Build target: 'chrome' (default) or 'safari'
+const TARGET = process.env.TARGET || 'chrome';
+const outDir = path.resolve(__dirname, `dist/${TARGET}`);
+const manifestFile = `manifest.${TARGET}.json`;
+
 module.exports = {
   entry: {
     background: './src/background.ts',
@@ -9,7 +14,7 @@ module.exports = {
     popup: './src/popup/popup.ts',
   },
   output: {
-    path: path.resolve(__dirname, 'dist'),
+    path: outDir,
     filename: '[name].js',
     clean: true,
   },
@@ -42,7 +47,7 @@ module.exports = {
       patterns: [
         { from: 'src/popup/popup.html', to: 'popup.html' },
         { from: 'src/popup/popup.css', to: 'popup.css' },
-        { from: 'manifest.json', to: 'manifest.json' },
+        { from: manifestFile, to: 'manifest.json' },
         { from: 'icons', to: 'icons' },
       ],
     }),
