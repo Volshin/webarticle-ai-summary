@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Article Summary</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <span class="logo">✦</span>
+        <span class="title">Article Summary</span>
+      </div>
+      <button id="settingsBtn" class="icon-btn" title="API Key Settings" aria-label="Settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- API Key Form (hidden by default) -->
+    <section id="apiKeySection" class="api-key-section hidden" aria-label="API Key Setup">
+      <p class="api-key-label">Enter your Anthropic API key to get started:</p>
+      <div class="api-key-row">
+        <input
+          type="password"
+          id="apiKeyInput"
+          class="api-key-input"
+          placeholder="sk-ant-..."
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button id="saveApiKeyBtn" class="btn btn-primary btn-sm">Save</button>
+      </div>
+      <a class="api-key-hint" href="https://console.anthropic.com/" target="_blank" rel="noopener">
+        Get a key at console.anthropic.com →
+      </a>
+    </section>
+
+    <!-- Loading State -->
+    <div id="loadingState" class="state-view" aria-live="polite">
+      <div class="spinner"></div>
+      <p class="loading-text">Analyzing article…</p>
+    </div>
+
+    <!-- Error State -->
+    <div id="errorState" class="state-view hidden">
+      <div class="error-icon">⚠</div>
+      <p id="errorMsg" class="error-msg"></p>
+      <button id="retryBtn" class="btn btn-secondary">Try Again</button>
+    </div>
+
+    <!-- Summary State -->
+    <div id="summaryState" class="state-view hidden">
+
+      <!-- Level indicator -->
+      <div class="level-bar" role="tablist" aria-label="Summary detail level">
+        <button class="level-tab active" data-level="0" role="tab">Brief</button>
+        <button class="level-tab" data-level="1" role="tab">Short</button>
+        <button class="level-tab" data-level="2" role="tab">Medium</button>
+        <button class="level-tab" data-level="3" role="tab">Full</button>
+      </div>
+
+      <!-- Summary text -->
+      <div id="summaryText" class="summary-text" aria-live="polite"></div>
+
+      <!-- Metrics -->
+      <div class="metrics">
+        <div class="metric-row">
+          <span class="metric-label">Fluff</span>
+          <div class="metric-track" title="How much of the article is filler or padding">
+            <div class="metric-fill" id="fluffFill"></div>
+          </div>
+          <span class="metric-value" id="fluffValue">—</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Novelty</span>
+          <div class="metric-track" title="How original or insightful the article is">
+            <div class="metric-fill" id="noveltyFill"></div>
+          </div>
+          <span class="metric-value" id="noveltyValue">—</span>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="actions">
+        <button id="moreDetailsBtn" class="btn btn-primary btn-full">
+          More Detail &rarr;
+        </button>
+        <button id="reanalyzeBtn" class="btn btn-ghost btn-sm">Re-analyze</button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
