@@ -1,12 +1,21 @@
 import browser from 'webextension-polyfill';
-import type { SummaryResult, BackgroundResponse } from '../types';
+import type { SummaryResult, BackgroundResponse, SummaryLanguage } from '../types';
 import { LEVEL_KEYS } from '../types';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+const DEFAULT_FONT_SIZE = 15;
+const MIN_FONT_SIZE = 12;
+const MAX_FONT_SIZE = 20;
 
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 let currentData: SummaryResult | null = null;
 let currentLevel = 0;
+let currentLanguage: SummaryLanguage = 'ru';
+let currentFontSize: number = DEFAULT_FONT_SIZE;
 
 // ---------------------------------------------------------------------------
 // DOM refs
@@ -25,11 +34,31 @@ const noveltyValue   = $('noveltyValue');
 const moreDetailsBtn = $('moreDetailsBtn');
 const retryBtn       = $('retryBtn');
 const reanalyzeBtn   = $('reanalyzeBtn');
+const openInTabBtn   = $('openInTabBtn');
 const settingsBtn    = $('settingsBtn');
 const apiKeySection  = $('apiKeySection');
 const apiKeyInput    = $('apiKeyInput') as HTMLInputElement;
 const saveApiKeyBtn  = $('saveApiKeyBtn');
+const fontDecBtn     = $('fontDecBtn');
+const fontIncBtn     = $('fontIncBtn');
 const levelTabs      = document.querySelectorAll<HTMLButtonElement>('.level-tab');
+const langBtns       = document.querySelectorAll<HTMLButtonElement>('.lang-btn');
+
+// ---------------------------------------------------------------------------
+// Font size
+// ---------------------------------------------------------------------------
+function applyFontSize(): void {
+  document.documentElement.style.setProperty('--summary-font-size', `${currentFontSize}px`);
+}
+
+// ---------------------------------------------------------------------------
+// Language
+// ---------------------------------------------------------------------------
+function updateLangButtons(): void {
+  langBtns.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.lang === currentLanguage);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // View helpers
@@ -39,9 +68,7 @@ function showOnly(el: HTMLElement): void {
   el.classList.remove('hidden');
 }
 
-function showLoading(): void {
-  showOnly(loadingState);
-}
+function showLoading(): void { showOnly(loadingState); }
 
 function showError(msg: string): void {
   errorMsg.textContent = msg;
@@ -49,7 +76,6 @@ function showError(msg: string): void {
 }
 
 function renderSummary(data: SummaryResult, level: number): void {
-  // Text — render paragraphs as separate <p> elements for readability
   const key = LEVEL_KEYS[level];
   const rawText = data[key] as string;
   summaryText.innerHTML = rawText
@@ -57,7 +83,6 @@ function renderSummary(data: SummaryResult, level: number): void {
     .map(p => `<p>${p.trim()}</p>`)
     .join('');
 
-  // Metrics
   const fluff   = data.fluffPercentage;
   const novelty = data.noveltyScore;
 
@@ -69,18 +94,16 @@ function renderSummary(data: SummaryResult, level: number): void {
   noveltyFill.style.backgroundColor = novelty > 60 ? '#22c55e' : novelty > 35 ? '#f59e0b' : '#ef4444';
   noveltyValue.textContent = `${novelty}%`;
 
-  // Level tabs
   levelTabs.forEach((tab, i) => {
     tab.classList.toggle('active', i === level);
     tab.classList.toggle('seen', i < level);
   });
 
-  // More details button
   if (level >= 3) {
     moreDetailsBtn.style.display = 'none';
   } else {
     moreDetailsBtn.style.display = '';
-    const nextLabels = ['Short', 'Medium', 'Full'];
+    const nextLabels = ['Short', 'Medium', 'Detailed'];
     moreDetailsBtn.textContent = `${nextLabels[level]} →`;
   }
 
@@ -98,7 +121,9 @@ function analyze(forceRefresh = false): void {
   if (forceRefresh) {
     browser.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       if (tab?.url) {
-        browser.storage.session.remove(`summary_${tab.url}`).then(() => sendAnalyzeMessage());
+        // Clear cache for all language variants of this URL
+        const keys = ['ru', 'en', 'de'].map(l => `summary_${tab.url}_${l}`);
+        browser.storage.session.remove(keys).then(() => sendAnalyzeMessage());
       } else {
         sendAnalyzeMessage();
       }
@@ -109,7 +134,7 @@ function analyze(forceRefresh = false): void {
 }
 
 function sendAnalyzeMessage(): void {
-  browser.runtime.sendMessage({ type: 'ANALYZE_PAGE' })
+  browser.runtime.sendMessage({ type: 'ANALYZE_PAGE', payload: { language: currentLanguage } })
     .then((response) => {
       const res = response as BackgroundResponse;
       if (!res.success) {
@@ -139,7 +164,6 @@ moreDetailsBtn.addEventListener('click', () => {
   }
 });
 
-// Click on level tabs to jump directly to that level
 levelTabs.forEach((tab, i) => {
   tab.addEventListener('click', () => {
     if (currentData) {
@@ -152,10 +176,31 @@ levelTabs.forEach((tab, i) => {
 retryBtn.addEventListener('click', () => analyze());
 reanalyzeBtn.addEventListener('click', () => analyze(true));
 
+openInTabBtn.addEventListener('click', async () => {
+  if (!currentData) return;
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.url) return;
+  const params = new URLSearchParams({ url: tab.url, lang: currentLanguage });
+  browser.tabs.create({ url: browser.runtime.getURL('tab.html') + '?' + params.toString() });
+});
+
+fontDecBtn.addEventListener('click', () => {
+  if (currentFontSize <= MIN_FONT_SIZE) return;
+  currentFontSize--;
+  applyFontSize();
+  browser.storage.local.set({ fontSize: currentFontSize });
+});
+
+fontIncBtn.addEventListener('click', () => {
+  if (currentFontSize >= MAX_FONT_SIZE) return;
+  currentFontSize++;
+  applyFontSize();
+  browser.storage.local.set({ fontSize: currentFontSize });
+});
+
 settingsBtn.addEventListener('click', () => {
   apiKeySection.classList.toggle('hidden');
   if (!apiKeySection.classList.contains('hidden')) {
-    // Pre-fill with existing key (masked)
     browser.runtime.sendMessage({ type: 'GET_API_KEY' }).then((res) => {
       const r = res as { apiKey: string | null };
       if (r.apiKey) {
@@ -174,7 +219,6 @@ apiKeyInput.addEventListener('keydown', (e) => {
 function saveApiKey(): void {
   const key = apiKeyInput.value.trim();
   if (!key) return;
-
   browser.runtime.sendMessage({ type: 'SET_API_KEY', payload: key }).then(() => {
     apiKeyInput.value = '';
     apiKeySection.classList.add('hidden');
@@ -182,7 +226,27 @@ function saveApiKey(): void {
   });
 }
 
+langBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const lang = btn.dataset.lang as SummaryLanguage;
+    if (lang === currentLanguage) return;
+    currentLanguage = lang;
+    browser.storage.local.set({ summaryLanguage: lang });
+    updateLangButtons();
+    analyze();
+  });
+});
+
 // ---------------------------------------------------------------------------
-// Boot — auto-analyze on popup open
+// Boot — load preferences, then auto-analyze
 // ---------------------------------------------------------------------------
-analyze();
+async function init(): Promise<void> {
+  const stored = await browser.storage.local.get(['fontSize', 'summaryLanguage']);
+  currentFontSize = (stored.fontSize as number) || DEFAULT_FONT_SIZE;
+  currentLanguage = (stored.summaryLanguage as SummaryLanguage) || 'ru';
+  applyFontSize();
+  updateLangButtons();
+  analyze();
+}
+
+init();

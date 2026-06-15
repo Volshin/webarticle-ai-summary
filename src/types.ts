@@ -18,6 +18,14 @@ export const LEVEL_KEYS: (keyof SummaryResult)[] = [
 
 export const LEVEL_LABELS = ['Brief', 'Short', 'Medium', 'Detailed'];
 
+export type SummaryLanguage = 'ru' | 'en' | 'de';
+
+export const LANGUAGE_NAMES: Record<SummaryLanguage, string> = {
+  ru: 'Russian',
+  en: 'English',
+  de: 'German',
+};
+
 export type MessageType =
   | 'ANALYZE_PAGE'
   | 'ANALYSIS_RESULT'

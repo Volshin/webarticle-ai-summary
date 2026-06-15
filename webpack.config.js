@@ -10,8 +10,9 @@ const manifestFile = `manifest.${TARGET}.json`;
 module.exports = {
   entry: {
     background: './src/background.ts',
-    content: './src/content.ts',
-    popup: './src/popup/popup.ts',
+    content:    './src/content.ts',
+    popup:      './src/popup/popup.ts',
+    tab:        './src/tab.ts',
   },
   output: {
     path: outDir,
@@ -21,16 +22,9 @@ module.exports = {
   resolve: {
     extensions: ['.ts', '.js'],
     fallback: {
-      fs: false,
-      path: false,
-      os: false,
-      crypto: false,
-      stream: false,
-      http: false,
-      https: false,
-      net: false,
-      tls: false,
-      zlib: false,
+      fs: false, path: false, os: false, crypto: false,
+      stream: false, http: false, https: false,
+      net: false, tls: false, zlib: false,
     },
   },
   module: {
@@ -46,9 +40,10 @@ module.exports = {
     new CopyPlugin({
       patterns: [
         { from: 'src/popup/popup.html', to: 'popup.html' },
-        { from: 'src/popup/popup.css', to: 'popup.css' },
-        { from: manifestFile, to: 'manifest.json' },
-        { from: 'icons', to: 'icons' },
+        { from: 'src/popup/popup.css',  to: 'popup.css'  },
+        { from: 'src/tab.html',         to: 'tab.html'   },
+        { from: manifestFile,           to: 'manifest.json' },
+        { from: 'icons',                to: 'icons'      },
       ],
     }),
     new webpack.DefinePlugin({
